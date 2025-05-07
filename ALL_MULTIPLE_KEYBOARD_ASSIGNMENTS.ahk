@@ -167,6 +167,111 @@ SetNumLockState, AlwaysOn ;i think this only works if launched as admin.
 ; ^+o		 			Time interpolation > optical flow
 
 
+
+;;;;;;;;;;FUNCTION FOR DIRECTLY APPLYING A PRESET EFFECT TO A CLIP!;;;;;;;;;;;;
+; preset() is my most used, and most useful AHK function! There is no good reason why Premiere doesn't have this functionality.
+;keep in mind, I use 150% UI scaling, so your pixel distances for commands like mousemove WILL be different!
+;to use this script yourself, carefully go through  testing the script and changing the values, ensuring that the script works, one line at a time. use message boxes to check on variables and see where the cursor is. remove those message boxes later when you have it all working!
+
+
+#IfWinActive ahk_exe Adobe Premiere Pro.exe
+preset(item)
+{
+
+
+ifWinNotActive ahk_exe Adobe Premiere Pro.exe
+	goto theEnding ;and this line is here just in case the function is called while not inside premiere.
+
+;Setting the coordinate mode is really important. This ensures that pixel distances are consistant for everything, everywhere.
+coordmode, pixel, Window
+coordmode, mouse, Window
+coordmode, Caret, Window
+
+
+;This (temporarily) blocks the mouse and keyboard from sending any information, which could interfere with the funcitoning of the script.
+BlockInput, SendAndMouse
+BlockInput, MouseMove
+BlockInput, On
+
+SetKeyDelay, 0 ;this ensures that any text AutoHotKey "types in," will input instantly, rather than one letter at a time.
+MouseGetPos, xposP, yposP ;---stores the cursor's current coordinates at X%xposP% Y%yposP%
+send, {mButton} ;this will MIDDLE CLICK to bring focus to the panel underneath the cursor (the timeline). I forget exactly why, but if you create a nest, and immediately try to apply a preset to it, it doesn't work, because the timeline wasn't in focus...?
+;but i just tried that and it still didn't work...
+;;DAMN IT, i forgot the { } and it was sending those as letters, I am an idiot. Need better diagnostics tools...
+Send ^+!7 ;CTRL SHIFT ALT 7 --- you must set this in premiere's keyboard shortcuts menu to "effects" panel
+
+sleep 15 ;"sleep" means the script will wait for 15 milliseconds before the next command. This is done to give Premiere some time to load its own things.
+Send ^b ;CTRL B -- set in premiere to "select find box"
+sleep 20
+
+;Any text in the Effects panel's find box has now been highlighted. There is also a blinking "text insertion point" at the end of that text. This is the vertical blinking line, or "caret." 
+
+MouseMove, %A_CaretX%, %A_CaretY%, 0
+sleep 15
+MouseMove, %A_CaretX%, %A_CaretY%, 0
+;and fortunately, AHK knows the exact X and Y position of this caret. So therefore, we can find the effects panel find box, no matter what monitor it is on, with 100% consistency.
+sleep 15
+;msgbox, carat X Y is %A_CaretX%, %A_CaretY%
+MouseGetPos, , , Window, classNN
+WinGetClass, class, ahk_id %Window%
+;msgbox, ahk_class =   %class% `nClassNN =     %classNN% `nTitle= %Window%
+;;;I think ControlGetPos is not affected by coordmode??  Or at least, it gave me the wrong coordinates if premiere is not fullscreened... https://autohotkey.com/docs/commands/ControlGetPos.htm 
+ControlGetPos, XX, YY, Width, Height, %classNN%, ahk_class %class%, SubWindow, SubWindow ;-I tried to exclude subwindows but I don't think it works...?
+;;my results:  59, 1229, 252, 21,      Edit1,    ahk_class Premiere Pro
+
+;msgbox, classNN = %classNN%
+;now we have found a lot of useful informaiton about this find box. Turns out, we don't need most of it...
+;we just need the X and Y coordinates of the "upper left" corner...
+
+;comment in the following line to get a message box of your current variable values. The script will not advance until you dismiss the message box.
+;MsgBox, xx=%XX% yy=%YY%
+
+MouseMove, XX-25, YY+10, 0 ;-----------------------moves cursor onto the magnifying glass
+;msgbox, should be in the center of the magnifying glass now.
+sleep 5
+;This types in the text you wanted to search for. Like "pop in." We can do this because the entire find box text was already selected by Premiere. Otherwise, we could click the magnifying glass if we wanted to , in order to select that find box.
+Send %item%
+
+;WinActivate,  ahk_class DroverLord - Window Class
+Send ^+!7 ;CTRL SHIFT ALT 7 --- you must set this in premiere's keyboard shortcuts menu to "effects" panel
+
+sleep 30
+MouseMove, 62, 95, 0, R ;----------------------relative to the position of the magnifying glass (established earlier,) this moves the cursor down and directly onto the preset's icon. In my case, it is inside the "presets" folder, then inside of another folder, and the written name sohuld be compeltely unique so that it is the first and only item.
+;msgbox, The cursor should be directly on top of the presets icon. `n If not, the script needs modification.
+MouseGetPos, iconX, iconY, Window, classNN ;---now we have to figure out the ahk_class of the current panel we are on. It used to be DroverLord - Window Class14, but the number changes anytime you move panels around... so i must always obtain the information anew.
+WinGetClass, class, ahk_id %Window% ;----------"ahk_id %Window%" is important for SOME REASON. if you delete it, this doesnt work.
+;msgbox, ahk_class =   %class% `nClassNN =     %classNN% `nTitle= %Window%
+ControlGetPos, xxx, yyy, www, hhh, %classNN%, ahk_class %class%, SubWindow, SubWindow ;-I tried to exclude subwindows but I don't think it works...?
+MouseMove, www/4, hhh/2, 0, R ;-----------------clicks in about the CENTER of the Effects panel. This clears the displayed presets from any duplication errors. VERY important. without this, the script fails 20% of the time.
+MouseClick, left, , , 1 ;-----------------------the actual click
+sleep 10
+MouseMove, iconX, iconY, 0 ;--------------------moves cursor BACK onto the effect's icon
+sleep 35
+MouseClickDrag, Left, , , %xposP%, %yposP%, 0 ;---drags this effect to the cursor's pervious coordinates, which should be above a clip, on the TIMELINE panel.
+sleep 10
+MouseClick, middle, , , 1 ;this returns focus to the panel the cursor is hovering above, WITHOUT selecting anything. great!
+blockinput, MouseMoveOff ;returning mouse movement ability
+BlockInput, off ;do not comment out or delete this line -- or you won't regain control of the keyboard!! However, CTRL+ALT+DEL will still work if you get stuck!! Cool.
+
+;remove the following thingy if it makes no sense to you
+IfInString, item, CROP
+{
+	if IsFunc("cropClick") {
+		Func := Func("cropClick")
+		sleep 160
+		RetVal := Func.Call() 
+		}
+	; sleep 160
+	; cropClick()
+	; ;msgbox, that had "CROP" in it.
+}
+;remove the above thingy if it makes no sense to you
+Send ^+!8 ;CTRL SHIFT ALT 8 --- you must set this in premiere's keyboard shortcuts menu to "effects Controls" panel
+theEnding:
+}
+;END of preset()
+
+
 ;----------------------------------------------------------------------------------
 ; KEYS                  PHOTOSHOP FUNCTIONS
 ;----------------------------------------------------------------------------------
